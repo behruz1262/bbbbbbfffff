@@ -1,0 +1,96 @@
+import React, { useState, useEffect } from 'react';
+import Papa from 'papaparse';
+import _ from 'lodash';
+
+const AuthorTable = () => {
+  const [authors, setAuthors] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const response = await window.fs.readFile('bbbbb.csv');
+        const text = new TextDecoder().decode(response);
+        
+        Papa.parse(text, {
+          header: true,
+          dynamicTyping: true,
+          skipEmptyLines: true,
+          complete: (results) => {
+            // Group by author
+            const authorGroups = _.groupBy(results.data, 'Author');
+            
+            // Create a dataset where each author appears only once
+            const authorsData = Object.keys(authorGroups).map(author => {
+              const books = authorGroups[author];
+              const bookCount = books.length;
+              const genres = _.uniq(books.map(book => book.Genre));
+              const latestBook = _.maxBy(books, 'Publication_date');
+              const earliestBook = _.minBy(books, 'Publication_date');
+              
+              return {
+                Author: author,
+                BookCount: bookCount,
+                Genres: genres.join(', '),
+                LatestPublication: latestBook ? latestBook.Publication_date : null,
+                FirstPublication: earliestBook ? earliestBook.Publication_date : null,
+                RepresentativeTitle: bookCount > 0 ? books[0].Title : null
+              };
+            });
+            
+            // Sort by author name and limit to 50
+            const sortedAuthors = _.sortBy(authorsData, 'Author').slice(0, 50);
+            setAuthors(sortedAuthors);
+            setIsLoading(false);
+          },
+          error: (error) => {
+            setError(error.message);
+            setIsLoading(false);
+          }
+        });
+      } catch (err) {
+        setError('Failed to load data: ' + err.message);
+        setIsLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
+
+  if (isLoading) return <div className="text-center p-4">Loading author data...</div>;
+  if (error) return <div className="text-red-500 p-4">Error: {error}</div>;
+
+  return (
+    <div className="max-w-full overflow-x-auto">
+      <table className="min-w-full bg-white border border-gray-200">
+        <thead>
+          <tr className="bg-gray-100">
+            <th className="py-2 px-4 border-b border-r text-left font-bold">Author (PK)</th>
+            <th className="py-2 px-4 border-b border-r text-left font-bold">Representative Work</th>
+            <th className="py-2 px-4 border-b border-r text-left font-bold">Number of Books</th>
+            <th className="py-2 px-4 border-b border-r text-left font-bold">Genres</th>
+            <th className="py-2 px-4 border-b text-left font-bold">Publication Range</th>
+          </tr>
+        </thead>
+        <tbody>
+          {authors.map((author) => (
+            <tr key={author.Author} className="hover:bg-gray-50">
+              <td className="py-2 px-4 border-b border-r">{author.Author}</td>
+              <td className="py-2 px-4 border-b border-r">{author.RepresentativeTitle}</td>
+              <td className="py-2 px-4 border-b border-r">{author.BookCount}</td>
+              <td className="py-2 px-4 border-b border-r">{author.Genres}</td>
+              <td className="py-2 px-4 border-b">
+                {author.FirstPublication === author.LatestPublication 
+                  ? author.FirstPublication 
+                  : `${author.FirstPublication} - ${author.LatestPublication}`}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
+export default AuthorTable;
